@@ -96,11 +96,11 @@ def register():
         cursor.execute("INSERT INTO users (name,email,password) VALUES (%s,%s,%s)", (name, email, hashed_password))
         mysql.connection.commit()
         cursor.close()
-        '''if users.role == "teacher":
-            return redirect(url_for('t_courses'))
+        if users.role == "teacher":
+            return redirect(url_for('index'))
         else:
 
-            return redirect(url_for('student_dashboard'))'''
+            return redirect(url_for('student_dashboard'))
         return redirect(url_for('login'))
 
     return render_template('register.html', form=form)
@@ -138,111 +138,109 @@ def dashboard():
 
         if user:
             if is_teacher():
+         
+
+                app = Flask(__name__)
+                app.secret_key = "Secret Key"
+
                 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql://root:''@localhost/data'
                 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-
+                
+                db = SQLAlchemy(app)
+                
+                class LoginForm(FlaskForm):
+                    email = StringField("Email", validators=[DataRequired(), Email()])
+                    password = PasswordField("Password", validators=[DataRequired()])
+                    submit = SubmitField("Login")
                 # Creating model table for our CRUD database
-                class Data(Model):
-                    id = Column(db.Integer, primary_key=True)
-                    name = Column(String(100))
-                    author = Column(String(100))
-
-                    def __init__(self, name, author):
+                class Data(db.Model):
+                    id = db.Column(db.Integer, primary_key=True)
+                    name = db.Column(db.String(100))
+                    author = db.Column(db.String(100))
+                    price = db.Column(db.Integer)
+                    def __init__(self, name, author , price):
                         self.name = name
                         self.author = author
-
+                        self.price = price
+                
                 # This is the index route where we are going to
                 # query on hogwarts student data
                 @app.route('/')
                 def index():
                     all_data = Data.query.all()
-
+                
                     return render_template("index.html", students=all_data)
-
-                # this route is for inserting data to mysql database via html forms
-                # ...
-
-                # This route is for inserting data to the MySQL database via HTML forms
-
-                # This route is for inserting data to the MySQL database via HTML forms
-                # New CRUD routes for teachers
-                @app.route('/teacher/insert', methods=['POST'])
-                def teacher_insert():
+        
+                
+                @app.route('/insert', methods=['POST'])
+                def insert():
                     if request.method == 'POST':
-                        user_id = session.get('user_id')
-                        if user_id:
-                            cursor = mysql.connection.cursor()
-                            cursor.execute("SELECT role FROM users WHERE id=%s", (user_id,))
-                            user = cursor.fetchone()
-                            cursor.close()
-
-                            if user and user[0] == 'teacher':
-                                # Implement the insert operation for teachers
-                                name = request.form['name']
-                                author = request.form['author']
-                                my_data = Data(name, author)
-                                session.add(my_data)
-                                session.commit()
-
-                                flash("Book Inserted Successfully")
-
-                                return redirect(url_for('index'))
-                            else:
-                                flash("You must be a teacher to perform this action.")
-                                return redirect(url_for('index'))
-
-                # Implement similar routes for update and delete operations for teachers
-
-                # This is our update route where we are going to update student data
+                        name = request.form['name']
+                        author = request.form['author']
+                        price = request.form['price']
+                
+                        my_data = Data(name, author , price)
+                        db.session.add(my_data)
+                        db.session.commit()
+                
+                        flash("Course Inserted Successfully")
+                
+                        return redirect(url_for('index'))
+                
+                
+                # this is our update route where we are going to update student data
                 @app.route('/update', methods=['GET', 'POST'])
                 def update():
                     if request.method == 'POST':
-                        user_id = session.get('user_id')
-                        if user_id:
-                            cursor = mysql.connection.cursor()
-                            cursor.execute("SELECT role FROM users WHERE id=%s", (user_id,))
-                            user = cursor.fetchone()
-                            cursor.close()
-
-                            if user and user[0] == 'teacher':
-                                my_data = Data.query.get(request.form.get('id'))
-
-                                my_data.name = request.form['name']
-                                my_data.author = request.form['author']
-
-                                session.commit()
-                                flash("Book Updated Successfully")
-
-                                return redirect(url_for('index'))
-                            else:
-                                flash("You must be a teacher to perform this action.")
-                                return redirect(url_for('Index'))  # Redirect to a suitable page for non-teachers
-
+                        my_data = Data.query.get(request.form.get('id'))
+                
+                        my_data.name = request.form['name']
+                        my_data.author = request.form['author']
+                        my_data.price = request.form['price']
+                
+                        db.session.commit()
+                        flash("Course Updated Successfully")
+                
+                        return redirect(url_for('index'))
+                
+                
                 # This route is for deleting student records
                 @app.route('/delete/<id>/', methods=['GET', 'POST'])
                 def delete(id):
-                    user_id = session.get('user_id')
-                    if user_id:
+                    my_data = Data.query.get(id)
+                    db.session.delete(my_data)
+                    db.session.commit()
+                    flash("Course Deleted Successfully")
+                
+                    return redirect(url_for('index'))
+                
+                @app.route('/logout')
+                def logout():
+                    session.pop('id', None)
+                    flash("You have been logged out successfully.")
+                    return redirect(url_for('login'))
+                
+                @app.route('/login', methods=['GET', 'POST'])
+                def login():
+                    form = LoginForm()
+                    if form.validate_on_submit():
+                        email = form.email.data
+                        password = form.password.data
+                
                         cursor = mysql.connection.cursor()
-                        cursor.execute("SELECT role FROM users WHERE id=%s", (user_id,))
+                        cursor.execute("SELECT * FROM users WHERE email=%s", (email,))
                         user = cursor.fetchone()
                         cursor.close()
-
-                        if user and user[0] == 'teacher':
-                            my_data = Data.query.get(id)
-                            session.delete(my_data)
-                            session.commit()
-                            flash("Book Deleted Successfully")
-
-                            return redirect(url_for('index'))
+                        if user and bcrypt.checkpw(password.encode('utf-8'), user[3].encode('utf-8')):
+                            session['user_id'] = user[0]
+                            return redirect(url_for('dashboard'))
                         else:
-                            flash("You must be a teacher to perform this action.")
-                            return redirect(url_for('index'))  # Redirect to a suitable page for non-teachers
-                return redirect(url_for('Index'))
-            else:
-                return render_template('dashboard.html', user=user)
-
-    return redirect(url_for('login'))
+                            flash("Login failed. Please check your email and password")
+                            return redirect(url_for('login'))
+                
+                    return render_template('login.html', form=form)
+                
+                    return redirect(url_for('login'))
 
 
 @app.route('/logout')
