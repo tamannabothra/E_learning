@@ -1,0 +1,10 @@
+{% extends 'app.html' %}
+
+{% block content %}
+    <h1>Students Enrolled in "{{ course_name }}"</h1>
+    <ul>
+        {% for student in students %}
+            <li>{{ student.name }} ({{ student.email }})</li>
+        {% endfor %}
+    </ul>
+{% endblock %}
